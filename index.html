@@ -1,0 +1,368 @@
+<!doctype html>
+<meta charset="UTF-8">
+<html>
+<head>
+<title>Quick Key</title>
+</head>
+<body onload="main()">
+<canvas id="canvas" width="1" height="1" style="font-family:Arial"></canvas>
+
+<script src="../jlib/gfx.js"></script>
+
+<script>
+
+var _qk = null;
+var _next_node_id = 0;
+
+var config = {
+    txtdisp_x                  : 4,           // pos of TextDisplay
+    txtdisp_y                  : 4,
+    kb_top_gap                 : 8,           // between TextDisplay and kb
+    kb_norm_fontsize           : 24,          // keyboard multi-char font
+    kb_bold_fontsize           : 30,          // keyboard single-char font
+    txtdisp_fontsize           : 36,          // TextDisplay font
+    color_cursor               : "d8d820",  // cursor arms
+    color_cursor2              : "ffff80",  // cursor central spot
+    color_bg                   : "a0a0a0",  // screen background
+    color_txtdisp_bg           : "e0e000",  // TextDisplay background
+    color_txtdisp_border       : "000000",  // TextDisplay border
+    color_txtdisp_text         : "000000",  // TextDisplay text
+    color_letter_sel           : "000000",  // Keyboard letter, normal
+    color_letter_nsel          : "c0c0c0",  // Keyboard letter, dimmed
+    ///color_texts_bg             : "f0f0f0",  // 
+    ///color_texts_border         : "000000",  // 
+}
+
+// A Node has up to four children.
+// A Letter is a leaf Node (no children) and has a text label.
+
+// ---------------------------------------------------------------------
+class Node {
+    constructor(x, y, parent) {
+        ///if (x < 0) then ???
+        ++_next_node_id;
+        this.parent       = parent;
+        this.x            = x;
+        this.y            = y;
+        this.node_id      = _next_node_id;
+    }
+    is_same(n) {
+        return this.node_id == n.node_id;
+    }
+    // Is 'a' an ancestor of this?
+    is_ancestor(a) {
+        let n = this;
+        while (n != null) { // step thru n's ancestors
+            if (n.is_same(a)) return true;
+            n = n.parent;
+        }
+        return false;
+    }
+    // Draw a node.
+    draw(gfx, sel) {
+        // Draw all the node's children.
+        if (this.up    != null) this.up.draw(gfx, sel);
+        if (this.down  != null) this.down.draw(gfx, sel);
+        if (this.left  != null) this.left.draw(gfx, sel);
+        if (this.right != null) this.right.draw(gfx, sel);
+    }
+    // Draw the cursor at this node.
+    draw_cursor(gfx) {
+        const B = 10; // radius of target blob
+        const S = 6; // radius of focus
+        const R = 4; // half-width of connecting line
+        const color = config.color_cursor;
+        if (this.up != null) {
+            gfx.draw_rect(this.x-R, this.up.y, 2*R, this.y-this.up.y, color);
+            gfx.draw_rect(this.up.x-B, this.up.y-B, 2*B, 2*B, color);
+        }
+        if (this.down != null) {
+            gfx.draw_rect(this.x-R, this.y, 2*R, this.down.y-this.y, color);
+            gfx.draw_rect(this.down.x-B, this.down.y-B, 2*B, 2*B, color);
+        }
+        if (this.left != null) {
+            gfx.draw_rect(this.left.x, this.left.y-R, this.x-this.left.x, 2*R, color);
+            gfx.draw_rect(this.left.x-B, this.left.y-B, 2*B, 2*B, color);
+        }
+        if (this.right != null) {
+            gfx.draw_rect(this.x, this.y-R, this.right.x-this.x, 2*R, color);
+            gfx.draw_rect(this.right.x-B, this.right.y-B, 2*B, 2*B, color);
+        }
+        gfx.draw_rect(this.x-S, this.y-S, 2*S, 2*S, config.color_cursor2);
+    }
+}
+
+// ---------------------------------------------------------------------
+class LetterNode extends Node {
+    constructor(x, y, parent, label) {
+        super(x, y, parent);
+        ///if node = invalid then return invalid
+        ///this.font   = font
+        this.label  = label
+    }
+    draw(gfx, sel) {
+        const ts = gfx.measure_text(this.label);
+        // Display dimmed if not in the sel tree.
+        const color = this.is_ancestor(sel) ?
+            config.color_letter_sel: config.color_letter_nsel;
+        gfx.draw_text(this.x - ts.width/2, this.y - ts.height/2, this.label, color);
+    }
+}
+
+// ---------------------------------------------------------------------
+class QuickKey {
+    constructor(gfx) {
+        //@@@ c = {}
+        //@@@ c.Append(Constants())
+        //@@@ if theme <> invalid then c.Append(theme)
+        this.gfx     = gfx;
+        this.resize();
+        this.text = "";
+        //@@@dfont           : m.fontstore.GetFont(c.txtdisp_fontsize)
+        //@@@kfont           : m.fontstore.GetFont(c.kb_norm_fontsize)
+        //@@@kfontb          : m.fontstore.GetFont(c.kb_bold_fontsize, ":b")
+        ///const r = this.text_display_rect();
+        ///config.kb_x = x
+        ///config.kb_y = r.y + r.h + c.kb_top_gap
+        ///config.screen = screen ' for DrawBackground, if used
+        this.alpha_lc_tree  = this.new_alpha_tree(false);
+        this.alpha_uc_tree  = this.new_alpha_tree(true);
+        this.punct_tree     = this.new_punct_tree();
+        this.root = this.alpha_lc_tree;
+        this.curr = this.root;
+    }
+    resize() {
+        const canvas = this.gfx.ctx.canvas;
+        this.x = 0;
+        this.y = 0;
+        this.w = canvas.width;
+        this.h = canvas.height;
+    }
+    draw() {
+        // Draw the background, text display, cursor and letters.
+        ///this.gfx.clear(config.color_bg);
+        this.draw_background();
+        this.curr.draw_cursor(this.gfx);
+        this.root.draw(this.gfx, this.curr);
+        this.draw_text_display();
+    }
+    draw_background() {
+        this.gfx.clear(config.color_bg);
+        ///const th = this.gfx.font_height;
+        ///const TM = 8; // text margins
+        // Draw texts rectangle.
+        ///const rx = 810;
+        ///const ry = 140;
+        ///const rw = 380;
+        ///const rh = (th * m.u_maxtexts) + (TM * 2);
+        ///this.gfx.draw_outlined_rect(rx+2, ry+2, rw-4, rh-4, 2, 2, config.color_texts_bg, config.color_texts_border);
+        ///// Draw the texts in the rectangle.
+        ///for i = 0 to m.u_texts.count()-1
+        ///    text = m.u_texts[i]
+        ///    while m.u_font.GetOneLineWidth(text, 2*rw)+12 > rw
+        ///        text = text.Left(text.Len()-1) ' truncate to fit rect width
+        ///    end while
+        ///    m.screen.DrawText(text, rx+TM, ry+TM + i*th, &h000000ff, m.u_font)
+        ///end for
+        ///m.screen.DrawText(m.u_version, 40, ScreenHeight()-36, &h000000ff, m.u_version_font)
+    }
+    text_display_rect() {
+        const B = 3; // border width
+        const LM = 5; // text left margin
+        const TM = 3; // text top/bottom margin
+        return {
+            x: this.x + config.txtdisp_x,
+            y: this.y + config.txtdisp_y,
+            w: this.w - 2 * config.txtdisp_x,
+            h: this.gfx.font_height + 2*B + 2*TM,
+            B: B,
+            LM: LM,
+            TM: TM,
+        }
+    }
+    draw_text_display() {
+        const r = this.text_display_rect();
+        this.gfx.draw_outlined_rect(r.x, r.y, r.w - 2*r.B, r.h - 2*r.B, r.B, r.B,
+            config.color_txtdisp_bg, config.color_txtdisp_border);
+        this.gfx.draw_text(r.x+r.LM, r.y+r.TM, this.text+"_", config.color_txtdisp_text);
+    }
+    set_curr(n) {
+        if (n == null) return;
+        this.curr = n;
+        if (n.label == null) return;
+        // Act on the Letter (usually insert it into the string).
+        if (n.label == "SP") {
+            this.text = this.text + " ";
+            //@@@ PlaySound("click", 40)
+        } else if (n.label == "BSP") {
+            if (this.text.length > 0)
+                this.text = this.text.substr(0, this.text.length-1);
+            //@@@ PlaySound("click", 40)
+        } else if (n.label == "CLR") {
+            this.text = "";
+            this.root = this.alpha_lc_tree;
+            //@@@ PlaySound("click", 40)
+        } else if (n.label == "Sym") {
+            this.root = this.punct_tree;
+        } else if (n.label == "ABC") {
+            this.root = this.alpha_uc_tree;
+        } else if (n.label == "abc") {
+            this.root = this.alpha_lc_tree;
+        } else { // insert it
+            this.text = this.text + n.label;
+            //'m.root = m.alpha_lc_tree ' FIXME
+            //@@@ PlaySound("click", 40)
+        }
+        this.curr = this.root;
+    }
+    toggle_root(tree, tree2) {
+        this.root = this.root.is_same(tree) ? tree2 : tree;
+        this.curr = this.root;
+    }
+    new_alpha_tree(uc) {
+        const x = 20; // FIXME
+        const y = 20; // FIXME
+        const fx = this.w / 600;
+        const fy = this.h / 420;
+        let _A="a" ; let  _B="b" ; let  _C="c" ; let  _D="d" ; let  _E="e" ; let  _F="f" ; let  _G="g" ; let  _H="h" ; let  _I="i" ;
+        let _J="j" ; let  _K="k" ; let  _L="l" ; let  _M="m" ; let  _N="n" ; let  _O="o" ; let  _P="p" ; let  _Q="q" ; let  _R="r" ;
+        let _S="s" ; let  _T="t" ; let  _U="u" ; let  _V="v" ; let  _W="w" ; let  _X="x" ; let  _Y="y" ; let  _Z="z" ;
+        let _ABC = "ABC";
+        if (uc) {
+            _A="A" ;  _B="B" ;  _C="C" ;  _D="D" ;  _E="E" ;  _F="F" ;  _G="G" ;  _H="H" ;  _I="I";
+            _J="J" ;  _K="K" ;  _L="L" ;  _M="M" ;  _N="N" ;  _O="O" ;  _P="P" ;  _Q="Q" ;  _R="R";
+            _S="S" ;  _T="T" ;  _U="U" ;  _V="V" ;  _W="W" ;  _X="X" ;  _Y="Y" ;  _Z="Z";
+            _ABC = "abc";
+        }
+        const root = new Node(x+303*fx,y+166*fy, null);
+        N4(root,             x+303*fx,y+47*fy,       x+303*fx,y+286*fy,      x+133*fx,y+166*fy,      x+472*fx,y+166*fy);
+        L4(root.up,          x+303*fx,y+23*fy,_E,    x+303*fx,y+72*fy,_A,    x+280*fx,y+47*fy,_I,    x+328*fx,y+47*fy,_O);
+        L4(root.down,        x+303*fx,y+264*fy,_N,   x+303*fx,y+310*fy,_T,   x+280*fx,y+286*fy,_R,   x+328*fx,y+286*fy,_S);
+        N4(root.right,       x+472*fx,y+109*fy,      x+472*fx,y+226*fy,      x+400*fx,y+166*fy,      x+544*fx,y+166*fy);
+
+        L4(root.right.up,    x+472*fx,y+85*fy,_U,    x+472*fx,y+133*fy,_V,   x+450*fx,y+109*fy,_B,   x+498*fx,y+109*fy,_D);
+        L4(root.right.down,  x+472*fx,y+204*fy,_G,   x+472*fx,y+250*fy,_Y,   x+450*fx,y+226*fy,_P,   x+498*fx,y+226*fy,_Q);
+        L4(root.right.left,  x+400*fx,y+144*fy,_M,   x+400*fx,y+192*fy,_W,   x+376*fx,y+166*fy,_H,   x+424*fx,y+166*fy,_L);
+        L4(root.right.right, x+544*fx,y+144*fy,_F,   x+544*fx,y+192*fy,_K,   x+520*fx,y+166*fy,_C,   x+568*fx,y+166*fy,"SP");
+        ///root.right.right.right.font = m.kfont ' SP yuck
+
+        root.left.up     = new LetterNode(x+133*fx,y+110*fy, root.left, "Sym");
+        root.left.down   = new LetterNode(x+133*fx,y+226*fy, root.left, _ABC);
+        root.left.left   = new Node(x+60*fx,y+166*fy, root.left);
+        root.left.right  = new Node(x+204*fx,y+166*fy, root.left);
+        L4(root.left.left,   -1,-1,"",               x+60*fx,y+192*fy,"CLR", x+35*fx,y+166*fy,"BSP", -1,-1,"");
+        L4(root.left.right,  x+204*fx,y+144*fy,".",  x+204*fx,y+192*fy,_J,   x+180*fx,y+166*fy,_X,   x+228*fx,y+166*fy,_Z);
+
+        return root;
+    }
+    new_punct_tree() {
+        const x = 20; // FIXME
+        const y = 20; // FIXME
+        const fx = this.w / 600;
+        const fy = this.h / 420;
+        const root = new Node(x+303*fx,y+166*fy, null);
+
+        N4(root,             x+303*fx,y+47*fy,       x+303*fx,y+286*fy,      x+133*fx,y+166*fy,      x+472*fx,y+166*fy);
+        L4(root.up,          x+303*fx,y+23*fy,".",   x+303*fx,y+72*fy,",",   x+280*fx,y+47*fy,":",   x+328*fx,y+47*fy,";");
+        N4(root.down,        x+303*fx,y+226*fy,      x+303*fx,y+346*fy,      x+220*fx,y+286*fy,      x+384*fx,y+286*fy);
+        N4(root.right,       x+472*fx,y+109*fy,      x+472*fx,y+226*fy,      x+400*fx,y+166*fy,      x+544*fx,y+166*fy);
+
+        L4(root.right.up,    x+472*fx,y+85*fy,"[",   x+472*fx,y+133*fy,"]",  x+450*fx,y+109*fy,"(",  x+498*fx,y+109*fy,")");
+        L4(root.right.down,  x+472*fx,y+204*fy,"<",  x+472*fx,y+250*fy,">",  x+450*fx,y+226*fy,"{",  x+498*fx,y+226*fy,"}");
+        L4(root.right.left,  x+400*fx,y+144*fy,"~",  -1,-1,"",               x+376*fx,y+166*fy,"?",  x+424*fx,y+166*fy,"!");
+        L4(root.right.right, x+544*fx,y+144*fy,"|",  x+544*fx,y+192*fy,"_",  x+520*fx,y+166*fy,"\\",  x+568*fx,y+166*fy,"/");
+
+        root.left.up     = new Node(x+133*fx,y+106*fy, root.left);
+        root.left.down   = new LetterNode(x+133*fx,y+230*fy, root.left, "abc");
+        root.left.left   = new Node(x+60*fx,y+166*fy, root.left);
+        root.left.right  = new Node(x+204*fx,y+166*fy, root.left);
+
+        L4(root.left.up,     x+133*fx,y+84*fy,"^",   x+133*fx,y+130*fy,"*",  x+108*fx,y+106*fy,"&",  x+156*fx,y+106*fy,"#");
+        L4(root.left.left,   -1,-1,"",               x+60*fx,y+192*fy,"CLR", x+35*fx,y+166*fy,"BSP", -1,-1,"");
+        L4(root.left.right,  x+204*fx,y+144*fy,".",  x+204*fx,y+192*fy,"`",  x+180*fx,y+166*fy,"'", x+228*fx,y+166*fy,'"');
+
+        L4(root.down.up,     x+303*fx,y+201*fy,"0",  x+303*fx,y+249*fy,"1",  x+278*fx,y+228*fy,"-",  x+326*fx,y+228*fy,"+");
+        L4(root.down.down,   x+303*fx,y+320*fy,"=",  x+303*fx,y+371*fy,"@",  x+278*fx,y+346*fy,"$",  x+326*fx,y+346*fy,"%");
+        L4(root.down.left,   x+220*fx,y+261*fy,"2",  x+220*fx,y+309*fy,"5",  x+195*fx,y+286*fy,"3",  x+243*fx,y+286*fy,"4");
+        L4(root.down.right,  x+384*fx,y+261*fy,"6",  x+384*fx,y+309*fy,"9",  x+358*fx,y+286*fy,"7",  x+408*fx,y+286*fy,"8");
+
+        return root;
+    }
+    event_keystroke(key, down) {
+        if (!down) return;
+        switch (key) {
+        case 'ArrowDown':
+            this.set_curr(this.curr.down);
+            break;
+        case 'ArrowUp':
+            this.set_curr(this.curr.up);
+            break;
+        case 'ArrowRight':
+            this.set_curr(this.curr.right);
+            break;
+        case 'ArrowLeft':
+            this.set_curr(this.curr.left);
+            break;
+        case 'Escape':
+            this.curr = this.root;
+            break;
+        }
+        this.draw();
+    }
+    event_mouse(x, y, down) {
+    }
+    static _event_keydown(e) { if (_qk != null) _qk.event_keystroke(e.key, true); }
+    static _event_keyup(e) { if (_qk != null) _qk.event_keystroke(e.key, false); }
+    static _event_mousedown(e) { if (_qk != null) _qk.event_mouse(e.offsetX, e.offsetY, true); }
+    static _event_mouseup(e) { if (_qk != null) _qk.event_mouse(e.offsetX, e.offsetY, false); }
+}
+
+function N4(n, xu, yu, xd, yd, xl, yl, xr, yr) {
+    n.up    = xu < 0 ? null : new Node(xu, yu, n);
+    n.down  = xd < 0 ? null : new Node(xd, yd, n);
+    n.left  = xl < 0 ? null : new Node(xl, yl, n);
+    n.right = xr < 0 ? null : new Node(xr, yr, n);
+}
+function L4(n, xu, yu, cu, xd, yd, cd, xl, yl, cl, xr, yr, cr) {
+    n.up    = xu < 0 ? null : new LetterNode(xu, yu, n, cu);
+    n.down  = xd < 0 ? null : new LetterNode(xd, yd, n, cd);
+    n.left  = xl < 0 ? null : new LetterNode(xl, yl, n, cl);
+    n.right = xr < 0 ? null : new LetterNode(xr, yr, n, cr);
+}
+
+// --------------------------------------------------------------------
+
+function canvas_size(name, w, h) {
+    const canvas = el(name);
+    canvas.width = w;
+    canvas.height = h;
+    return canvas;
+}
+
+function canvas_to_window() {
+    const s = 20;
+    return canvas_size("canvas", window.innerWidth - s, window.innerHeight - s);
+}
+
+function canvas_resize() {
+    canvas_to_window();
+    if (_qk != null) _qk.resize();
+}
+
+function main() {
+    munge_config();
+    const canvas = canvas_to_window();
+    const gfx = new Graphics(canvas.getContext("2d"), canvas.height*.040);
+    _qk = new QuickKey(gfx);
+    document.addEventListener('keyup', QuickKey._event_keyup);
+    document.addEventListener('keydown', QuickKey._event_keydown);
+    document.addEventListener('mousedown', QuickKey._event_mousedown);
+    document.addEventListener('mouseup', QuickKey._event_mouseup);
+    document.addEventListener('mousemove', QuickKey._event_mousemove);
+    window.addEventListener('resize', canvas_resize, false);
+    _qk.draw();
+}
+
+</script>
+</body>
+</html>
