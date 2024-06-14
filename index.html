@@ -15,12 +15,11 @@ var _qk = null;
 var _next_node_id = 0;
 
 var config = {
-    txtdisp_x                  : 4,           // pos of TextDisplay
-    txtdisp_y                  : 4,
+    font_frac                  : .040,
     kb_top_gap                 : 8,           // between TextDisplay and kb
-    kb_norm_fontsize           : 24,          // keyboard multi-char font
-    kb_bold_fontsize           : 30,          // keyboard single-char font
-    txtdisp_fontsize           : 36,          // TextDisplay font
+    xmargin                    : .01,
+    ymargin                    : .02,
+
     color_cursor               : "d8d820",  // cursor arms
     color_cursor2              : "ffff80",  // cursor central spot
     color_bg                   : "a0a0a0",  // screen background
@@ -111,20 +110,21 @@ class LetterNode extends Node {
 class QuickKey {
     constructor(gfx) {
         this.gfx     = gfx;
-        this.resize();
         this.text = "";
-        this.alpha_lc_tree  = this.new_alpha_tree(false);
-        this.alpha_uc_tree  = this.new_alpha_tree(true);
-        this.punct_tree     = this.new_punct_tree();
-        this.root = this.alpha_lc_tree;
-        this.curr = this.root;
+        this.resize();
     }
     resize() {
         const canvas = this.gfx.ctx.canvas;
         this.x = 0;
         this.y = 0;
-        this.w = canvas.width;
-        this.h = canvas.height;
+        this.w = canvas.width - 20; // FIXME fudge
+        this.h = canvas.height - 10;
+        this.alpha_lc_tree  = this.new_alpha_tree(false);
+        this.alpha_uc_tree  = this.new_alpha_tree(true);
+        this.punct_tree     = this.new_punct_tree();
+        this.root = this.alpha_lc_tree;
+        this.curr = this.root;
+        this.draw();
     }
     draw() {
         // Draw the background, text display, cursor and letters.
@@ -133,23 +133,33 @@ class QuickKey {
         this.root.draw(this.gfx, this.curr);
         this.draw_text_display();
     }
+    kb_rect() {
+        const td = this.text_display_rect();
+        return {
+            x: this.x + this.w * config.xmargin,
+            y: td.y + td.h + 5,
+            w: this.w - 2*config.xmargin,
+            h: this.h - td.h - 2*config.ymargin,
+        };
+    }
     text_display_rect() {
         const B = 3; // border width
         const LM = 5; // text left margin
         const TM = 3; // text top/bottom margin
+        const fh = Math.floor(this.gfx.font_height * 1.3);
         return {
-            x: this.x + config.txtdisp_x,
-            y: this.y + config.txtdisp_y,
-            w: this.w - 2 * config.txtdisp_x,
-            h: this.gfx.font_height + 2*B + 2*TM,
+            x: this.x + this.w * config.xmargin,
+            y: this.y + this.h * config.ymargin,
+            w: this.w - 2 * config.xmargin,
+            h: fh + 2*TM,
             B: B,
             LM: LM,
             TM: TM,
-        }
+        };
     }
     draw_text_display() {
         const r = this.text_display_rect();
-        this.gfx.draw_outlined_rect(r.x, r.y, r.w - 2*r.B, r.h - 2*r.B, r.B, r.B,
+        this.gfx.draw_outlined_rect(r.x, r.y, r.w, r.h, r.B, r.B,
             config.color_txtdisp_bg, config.color_txtdisp_border);
         this.gfx.draw_text(r.x+r.LM, r.y+r.TM, this.text+"_", config.color_txtdisp_text);
     }
@@ -312,14 +322,17 @@ function canvas_to_window() {
 }
 
 function canvas_resize() {
-    canvas_to_window();
-    if (_qk != null) _qk.resize();
+    const canvas = canvas_to_window();
+    if (_qk != null) {
+        _qk.gfx.set_font_size(canvas.height * config.font_frac);
+        _qk.resize();
+    }
 }
 
 function main() {
     munge_config();
     const canvas = canvas_to_window();
-    const gfx = new Graphics(canvas.getContext("2d"), canvas.height*.040);
+    const gfx = new Graphics(canvas.getContext("2d"), canvas.height * config.font_frac);
     _qk = new QuickKey(gfx);
     document.addEventListener('keyup', QuickKey._event_keyup);
     document.addEventListener('keydown', QuickKey._event_keydown);
@@ -327,7 +340,6 @@ function main() {
     document.addEventListener('mouseup', QuickKey._event_mouseup);
     document.addEventListener('mousemove', QuickKey._event_mousemove);
     window.addEventListener('resize', canvas_resize, false);
-    _qk.draw();
 }
 
 </script>
