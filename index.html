@@ -15,7 +15,7 @@ var _qk = null;
 var _next_node_id = 0;
 
 var config = {
-    font_frac                  : .040,
+    font_frac                  : .060,
     left_panel_frac            : .7,
     kb_top_gap                 : 8,           // between TextDisplay and kb
     xmargin                    : .03,
@@ -23,8 +23,8 @@ var config = {
 
     color_btn_bg               : "e0e0f0",
     color_btn_text             : "000000",
-    color_cursor               : "d8d820",  // cursor arms
-    color_cursor2              : "ffff80",  // cursor central spot
+    color_cursor               : "c0c010",  // cursor arms
+    color_cursor2              : "ffffa0",  // cursor central spot
     color_bg                   : "a0a0a0",  // screen background
     color_txtdisp_bg           : "e0e000",  // TextDisplay background
     color_txtdisp_border       : "000000",  // TextDisplay border
@@ -70,9 +70,10 @@ class Node {
     }
     // Draw the cursor at this node.
     draw_cursor(gfx) {
-        const B = 10; // radius of target blob
-        const S = 6; // radius of focus
-        const R = 4; // half-width of connecting line
+        const ch = gfx.ctx.canvas.height;
+        const B = ch / 60; // radius of target blob
+        const S = ch / 90; // radius of focus
+        const R = ch / 120; // half-width of connecting line
         const color = config.color_cursor;
         if (this.up != null) {
             gfx.draw_rect(this.x-R, this.up.y, 2*R, this.y-this.up.y, color);
@@ -174,12 +175,12 @@ class QuickKey {
         const msg = this.gfx.draw_paragraph("Use arrow keys to move toward the letter you want.",
             r.x, y, r.w, config.color_txtdisp_text, true);
         y += msg.h + this.gfx.font_height;
-        const bw = r.h;
-        const bh = r.h;
-        this.btn_up    = { label: "\u2b06", x: r.x + (r.w - bw) / 2, y: y, w: bw, h: bh };
-        this.btn_left  = { label: "\u2b05", x: this.btn_up.x - bw, y: y + bh, w: bw, h: bh };
-        this.btn_right = { label: "\u2b95", x: this.btn_up.x + bw, y: y + bh, w: bw, h: bh };
-        this.btn_down  = { label: "\u2b07", x: this.btn_up.x, y: y + 2*bh, w: bw, h: bh };
+        const bh = r.h * 1.25;
+        const bw = bh;
+        this.btn_up    = { label: "\u2191", x: r.x + (r.w - bw) / 2, y: y, w: bw, h: bh };
+        this.btn_left  = { label: "\u2190", x: this.btn_up.x - bw, y: y + bh, w: bw, h: bh };
+        this.btn_right = { label: "\u2192", x: this.btn_up.x + bw, y: y + bh, w: bw, h: bh };
+        this.btn_down  = { label: "\u2193", x: this.btn_up.x, y: y + 2*bh, w: bw, h: bh };
         this.draw_button(this.btn_up);
         this.draw_button(this.btn_down);
         this.draw_button(this.btn_left);
@@ -230,7 +231,7 @@ class QuickKey {
         const x = kr.x;
         const y = kr.y;
         const fx = kr.w / 600;
-        const fy = kr.h / 420;
+        const fy = kr.h / 320;
         let _A="a" ; let  _B="b" ; let  _C="c" ; let  _D="d" ; let  _E="e" ; let  _F="f" ; let  _G="g" ; let  _H="h" ; let  _I="i" ;
         let _J="j" ; let  _K="k" ; let  _L="l" ; let  _M="m" ; let  _N="n" ; let  _O="o" ; let  _P="p" ; let  _Q="q" ; let  _R="r" ;
         let _S="s" ; let  _T="t" ; let  _U="u" ; let  _V="v" ; let  _W="w" ; let  _X="x" ; let  _Y="y" ; let  _Z="z" ;
