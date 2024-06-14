@@ -16,10 +16,13 @@ var _next_node_id = 0;
 
 var config = {
     font_frac                  : .040,
+    left_panel_frac            : .7,
     kb_top_gap                 : 8,           // between TextDisplay and kb
-    xmargin                    : .01,
+    xmargin                    : .03,
     ymargin                    : .02,
 
+    color_btn_bg               : "e0e0f0",
+    color_btn_text             : "000000",
     color_cursor               : "d8d820",  // cursor arms
     color_cursor2              : "ffff80",  // cursor central spot
     color_bg                   : "a0a0a0",  // screen background
@@ -111,14 +114,17 @@ class QuickKey {
     constructor(gfx) {
         this.gfx     = gfx;
         this.text = "";
+        this.left_btn = this.right_btn = this.up_btn = this.down_btn = null;
         this.resize();
     }
     resize() {
         const canvas = this.gfx.ctx.canvas;
         this.x = 0;
         this.y = 0;
-        this.w = canvas.width - 20; // FIXME fudge
-        this.h = canvas.height - 10;
+        this.w = canvas.width;
+        this.h = canvas.height;
+        this.lw = this.w * config.left_panel_frac;
+        this.rw = this.w - this.lw;
         this.alpha_lc_tree  = this.new_alpha_tree(false);
         this.alpha_uc_tree  = this.new_alpha_tree(true);
         this.punct_tree     = this.new_punct_tree();
@@ -129,6 +135,8 @@ class QuickKey {
     draw() {
         // Draw the background, text display, cursor and letters.
         this.gfx.clear(config.color_bg);
+        const kr = this.kb_rect();
+        this.gfx.draw_rect(kr.x + kr.w, kr.y, 2, kr.h, config.color_txtdisp_border);
         this.curr.draw_cursor(this.gfx);
         this.root.draw(this.gfx, this.curr);
         this.draw_text_display();
@@ -136,21 +144,21 @@ class QuickKey {
     kb_rect() {
         const td = this.text_display_rect();
         return {
-            x: this.x + this.w * config.xmargin,
-            y: td.y + td.h + 5,
-            w: this.w - 2*config.xmargin,
-            h: this.h - td.h - 2*config.ymargin,
+            x: this.x + this.lw * config.xmargin,
+            y: td.y,
+            w: this.lw - 2*this.lw * config.xmargin,
+            h: this.h - td.h - 2*this.h*config.ymargin,
         };
     }
     text_display_rect() {
         const B = 3; // border width
-        const LM = 5; // text left margin
+        const LM = 8; // text left margin
         const TM = 3; // text top/bottom margin
         const fh = Math.floor(this.gfx.font_height * 1.3);
         return {
-            x: this.x + this.w * config.xmargin,
+            x: this.x + this.lw,
             y: this.y + this.h * config.ymargin,
-            w: this.w - 2 * config.xmargin,
+            w: this.rw - this.rw * config.xmargin,
             h: fh + 2*TM,
             B: B,
             LM: LM,
@@ -162,6 +170,27 @@ class QuickKey {
         this.gfx.draw_outlined_rect(r.x, r.y, r.w, r.h, r.B, r.B,
             config.color_txtdisp_bg, config.color_txtdisp_border);
         this.gfx.draw_text(r.x+r.LM, r.y+r.TM, this.text+"_", config.color_txtdisp_text);
+        let y = r.y + this.gfx.font_height * 2;
+        const msg = this.gfx.draw_paragraph("Use arrow keys to move toward the letter you want.",
+            r.x, y, r.w, config.color_txtdisp_text, true);
+        y += msg.h + this.gfx.font_height;
+        const bw = r.h;
+        const bh = r.h;
+        this.btn_up    = { label: "\u2b06", x: r.x + (r.w - bw) / 2, y: y, w: bw, h: bh };
+        this.btn_left  = { label: "\u2b05", x: this.btn_up.x - bw, y: y + bh, w: bw, h: bh };
+        this.btn_right = { label: "\u2b95", x: this.btn_up.x + bw, y: y + bh, w: bw, h: bh };
+        this.btn_down  = { label: "\u2b07", x: this.btn_up.x, y: y + 2*bh, w: bw, h: bh };
+        this.draw_button(this.btn_up);
+        this.draw_button(this.btn_down);
+        this.draw_button(this.btn_left);
+        this.draw_button(this.btn_right);
+    }
+    draw_button(btn) {
+        this.gfx.draw_rect(btn.x, btn.y, btn.w, btn.h, config.color_btn_bg);
+        this.gfx.draw_centered_text(btn.x, btn.y, btn.w, btn.label, config.color_btn_text);
+    }
+    in_button(btn, x, y) {
+        return x >= btn.x && x < btn.x + btn.w && y >= btn.y && y < btn.y + btn.h;
     }
     set_curr(n) {
         if (n == null) return;
@@ -197,10 +226,11 @@ class QuickKey {
         this.curr = this.root;
     }
     new_alpha_tree(uc) {
-        const x = 20; // FIXME
-        const y = 20; // FIXME
-        const fx = this.w / 600;
-        const fy = this.h / 420;
+        const kr = this.kb_rect();
+        const x = kr.x;
+        const y = kr.y;
+        const fx = kr.w / 600;
+        const fy = kr.h / 420;
         let _A="a" ; let  _B="b" ; let  _C="c" ; let  _D="d" ; let  _E="e" ; let  _F="f" ; let  _G="g" ; let  _H="h" ; let  _I="i" ;
         let _J="j" ; let  _K="k" ; let  _L="l" ; let  _M="m" ; let  _N="n" ; let  _O="o" ; let  _P="p" ; let  _Q="q" ; let  _R="r" ;
         let _S="s" ; let  _T="t" ; let  _U="u" ; let  _V="v" ; let  _W="w" ; let  _X="x" ; let  _Y="y" ; let  _Z="z" ;
@@ -233,10 +263,11 @@ class QuickKey {
         return root;
     }
     new_punct_tree() {
-        const x = 20; // FIXME
-        const y = 20; // FIXME
-        const fx = this.w / 600;
-        const fy = this.h / 420;
+        const kr = this.kb_rect();
+        const x = kr.x;
+        const y = kr.y;
+        const fx = kr.w / 600;
+        const fy = kr.h / 420;
         const root = new Node(x+303*fx,y+166*fy, null);
 
         N4(root,             x+303*fx,y+47*fy,       x+303*fx,y+286*fy,      x+133*fx,y+166*fy,      x+472*fx,y+166*fy);
@@ -287,6 +318,18 @@ class QuickKey {
         this.draw();
     }
     event_mouse(x, y, down) {
+        if (!down) return;
+        if (this.in_button(this.btn_down, x, y))
+            this.set_curr(this.curr.down);
+        else if (this.in_button(this.btn_up, x, y))
+            this.set_curr(this.curr.up);
+        else if (this.in_button(this.btn_right, x, y))
+            this.set_curr(this.curr.right);
+        else if (this.in_button(this.btn_left, x, y))
+            this.set_curr(this.curr.left);
+        else
+            return;
+        this.draw();
     }
     static _event_keydown(e) { if (_qk != null) _qk.event_keystroke(e.key, true); }
     static _event_keyup(e) { if (_qk != null) _qk.event_keystroke(e.key, false); }
