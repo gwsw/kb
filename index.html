@@ -96,8 +96,6 @@ class Node {
 class LetterNode extends Node {
     constructor(x, y, parent, label) {
         super(x, y, parent);
-        ///if node = invalid then return invalid
-        ///this.font   = font
         this.label  = label
     }
     draw(gfx, sel) {
@@ -112,19 +110,9 @@ class LetterNode extends Node {
 // ---------------------------------------------------------------------
 class QuickKey {
     constructor(gfx) {
-        //@@@ c = {}
-        //@@@ c.Append(Constants())
-        //@@@ if theme <> invalid then c.Append(theme)
         this.gfx     = gfx;
         this.resize();
         this.text = "";
-        //@@@dfont           : m.fontstore.GetFont(c.txtdisp_fontsize)
-        //@@@kfont           : m.fontstore.GetFont(c.kb_norm_fontsize)
-        //@@@kfontb          : m.fontstore.GetFont(c.kb_bold_fontsize, ":b")
-        ///const r = this.text_display_rect();
-        ///config.kb_x = x
-        ///config.kb_y = r.y + r.h + c.kb_top_gap
-        ///config.screen = screen ' for DrawBackground, if used
         this.alpha_lc_tree  = this.new_alpha_tree(false);
         this.alpha_uc_tree  = this.new_alpha_tree(true);
         this.punct_tree     = this.new_punct_tree();
@@ -140,31 +128,10 @@ class QuickKey {
     }
     draw() {
         // Draw the background, text display, cursor and letters.
-        ///this.gfx.clear(config.color_bg);
-        this.draw_background();
+        this.gfx.clear(config.color_bg);
         this.curr.draw_cursor(this.gfx);
         this.root.draw(this.gfx, this.curr);
         this.draw_text_display();
-    }
-    draw_background() {
-        this.gfx.clear(config.color_bg);
-        ///const th = this.gfx.font_height;
-        ///const TM = 8; // text margins
-        // Draw texts rectangle.
-        ///const rx = 810;
-        ///const ry = 140;
-        ///const rw = 380;
-        ///const rh = (th * m.u_maxtexts) + (TM * 2);
-        ///this.gfx.draw_outlined_rect(rx+2, ry+2, rw-4, rh-4, 2, 2, config.color_texts_bg, config.color_texts_border);
-        ///// Draw the texts in the rectangle.
-        ///for i = 0 to m.u_texts.count()-1
-        ///    text = m.u_texts[i]
-        ///    while m.u_font.GetOneLineWidth(text, 2*rw)+12 > rw
-        ///        text = text.Left(text.Len()-1) ' truncate to fit rect width
-        ///    end while
-        ///    m.screen.DrawText(text, rx+TM, ry+TM + i*th, &h000000ff, m.u_font)
-        ///end for
-        ///m.screen.DrawText(m.u_version, 40, ScreenHeight()-36, &h000000ff, m.u_version_font)
     }
     text_display_rect() {
         const B = 3; // border width
@@ -192,16 +159,16 @@ class QuickKey {
         if (n.label == null) return;
         // Act on the Letter (usually insert it into the string).
         if (n.label == "SP") {
+            //PlaySound("click", 40);
             this.text = this.text + " ";
-            //@@@ PlaySound("click", 40)
         } else if (n.label == "BSP") {
+            //PlaySound("click", 40);
             if (this.text.length > 0)
                 this.text = this.text.substr(0, this.text.length-1);
-            //@@@ PlaySound("click", 40)
         } else if (n.label == "CLR") {
+            //PlaySound("click", 40);
             this.text = "";
             this.root = this.alpha_lc_tree;
-            //@@@ PlaySound("click", 40)
         } else if (n.label == "Sym") {
             this.root = this.punct_tree;
         } else if (n.label == "ABC") {
@@ -209,9 +176,9 @@ class QuickKey {
         } else if (n.label == "abc") {
             this.root = this.alpha_lc_tree;
         } else { // insert it
+            //PlaySound("click", 40);
             this.text = this.text + n.label;
             //'m.root = m.alpha_lc_tree ' FIXME
-            //@@@ PlaySound("click", 40)
         }
         this.curr = this.root;
     }
